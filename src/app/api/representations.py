@@ -4,6 +4,8 @@ from app.schemas.categories.models import Category
 from app.schemas.products.models import Product
 from app.schemas.shops.models import Shop
 from app.schemas.users.models import User, Wallet
+from app.schemas.users.models import WalletTransaction
+from app.schemas.addresses.models import UserAddress
 
 
 def timestamp(value: datetime) -> str:
@@ -16,6 +18,14 @@ def user_data(user: User) -> dict:
 
 def wallet_data(wallet: Wallet) -> dict:
     return {"id": str(wallet.id), "balance": wallet.balance, "currency": "TOMAN", "updated_at": timestamp(wallet.updated_at)}
+
+
+def wallet_transaction_data(entry: WalletTransaction) -> dict:
+    return {"id": str(entry.id), "reason": entry.reason, "reference_id": str(entry.reference_id) if entry.reference_id is not None else None, "amount": entry.amount, "balance_after": entry.balance_after, "note": entry.note, "created_at": timestamp(entry.created_at)}
+
+
+def address_data(address: UserAddress) -> dict:
+    return {"id": str(address.id), "recipient_name": address.recipient_name, "recipient_phone": address.recipient_phone, "province": address.province, "city": address.city, "address_line": address.address_line, "postal_code": address.postal_code, "created_at": timestamp(address.created_at)}
 
 
 def shop_data(shop: Shop) -> dict:

@@ -3,6 +3,8 @@
 import secrets
 from pathlib import Path
 
+from alembic.config import Config
+from alembic.script import ScriptDirectory
 from sqlalchemy import select, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
@@ -65,7 +67,9 @@ def main() -> None:
         password = secrets.token_urlsafe(18)
 
     with Session(engine()) as session:
-        if session.scalar(text("SELECT version_num FROM alembic_version")) != "0002_full_design":
+        current_revision = session.scalar(text("SELECT version_num FROM alembic_version"))
+        migration_head = ScriptDirectory.from_config(Config(str(ROOT / "alembic.ini"))).get_current_head()
+        if current_revision != migration_head:
             raise SystemExit("Run uv run alembic upgrade head before seeding.")
         if not existing_credentials and session.scalar(select(User.id).where(User.mobile.in_([account[1] for account in ACCOUNTS])).limit(1)):
             raise SystemExit("Demo accounts already exist but .demo-credentials is missing; refusing to reset their passwords.")

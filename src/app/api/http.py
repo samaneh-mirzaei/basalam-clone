@@ -27,7 +27,7 @@ class ContractRoute(APIRoute):
 
         async def checked(request: Request) -> Response:
             expected = {"PATCH": "application/merge-patch+json", "POST": "application/json", "PUT": "application/json"}.get(request.method)
-            if expected and request.headers.get("content-type", "").split(";", 1)[0].strip().lower() != expected:
+            if expected and not (request.method == "PUT" and not await request.body()) and request.headers.get("content-type", "").split(";", 1)[0].strip().lower() != expected:
                 raise HTTPException(415, f"Content-Type must be {expected}.")
             return await handler(request)
 

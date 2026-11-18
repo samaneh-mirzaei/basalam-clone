@@ -22,10 +22,10 @@ router = APIRouter(route_class=ContractRoute)
     status_code=201,
     tags=["Users"],
     summary="Register a customer",
-    description="Create a customer account using an Iranian mobile number, name, and password (minimum 8 characters). Registration atomically creates a wallet with a 1,000,000 Toman welcome credit and an empty cart. Returns 201 with the user and wallet; a duplicate mobile returns 409. Operator accounts cannot be registered here.",
+    description="Create a customer account using an Iranian mobile number, name, and password (minimum 8 characters). Registration atomically creates a wallet with a 1,000,000 Toman welcome credit and an empty cart. Returns 201 with the user and wallet; a duplicate mobile returns 409. Operator and admin accounts cannot be registered here.",
 )
 def register(body: Registration, request: Request, session: SessionDep):
-    user = User(mobile=body.mobile, full_name=body.full_name, password_hash=hash_password(body.password))
+    user = User(mobile=body.mobile, full_name=body.full_name, role="customer", password_hash=hash_password(body.password))
     try:
         session.add(user)
         session.flush()

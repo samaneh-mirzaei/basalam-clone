@@ -11,13 +11,13 @@ class User(Base):
     __tablename__ = "users"
     __table_args__ = (
         CheckConstraint("mobile ~ '^09[0-9]{9}$'", name="ck_users_mobile"),
-        CheckConstraint("role IN ('customer', 'operator')", name="ck_users_role"),
+        CheckConstraint("role IN ('customer', 'operator', 'admin')", name="ck_users_role"),
     )
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     mobile: Mapped[str] = mapped_column(String(11), unique=True, nullable=False)
     full_name: Mapped[str] = mapped_column(String(100), nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
-    role: Mapped[str] = mapped_column(ENUM("customer", "operator", name="user_role", create_type=False), nullable=False, server_default="customer")
+    role: Mapped[str] = mapped_column(ENUM("customer", "operator", "admin", name="user_role", create_type=False), nullable=False, server_default="customer")
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
 

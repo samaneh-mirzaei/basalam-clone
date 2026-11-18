@@ -7,7 +7,7 @@ from sqlalchemy import and_, or_, select
 from sqlalchemy.exc import IntegrityError
 
 from app.api.catalog import catalog_response, decode_cursor, encode_cursor, page_response
-from app.api.dependencies import CurrentUser, OptionalUser, SessionDep
+from app.api.dependencies import CurrentUser, OptionalUser, SessionDep, has_operator_access
 from app.api.http import ContractRoute, created, supplied_patch_fields
 from app.api.representations import product_data, shop_data
 from app.core.errors import APIError
@@ -20,7 +20,7 @@ router = APIRouter(route_class=ContractRoute)
 
 
 def visible(product: Product, shop: Shop, user) -> bool:
-    return (product.status == "published" and shop.status == "active") or bool(user and (user.id == shop.owner_id or user.role == "operator"))
+    return (product.status == "published" and shop.status == "active") or bool(user and (user.id == shop.owner_id or has_operator_access(user)))
 
 
 def product_tag(product: Product, shop: Shop) -> str:
@@ -100,7 +100,7 @@ def get_product(product_id: int, request: Request, session: SessionDep, user: Op
         raise APIError(404, "PRODUCT_NOT_FOUND", "Product not found.")
     images = session.scalars(select(ProductImage).where(ProductImage.product_id == product.id).order_by(ProductImage.sort_order)).all()
     representation = {**product_data(product, [{"id": str(image.id), "url": image.url, "sort_order": image.sort_order} for image in images]), "shop": shop_data(shop)}
-    private = bool(user and (user.id == shop.owner_id or user.role == "operator"))
+    private = bool(user and (user.id == shop.owner_id or has_operator_access(user)))
     return catalog_response(request, representation, product_tag(product, shop), private)
 
 

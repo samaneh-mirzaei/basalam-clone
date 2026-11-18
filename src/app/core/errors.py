@@ -5,14 +5,15 @@ from starlette.exceptions import HTTPException
 
 
 class APIError(Exception):
-    def __init__(self, status: int, code: str, message: str):
+    def __init__(self, status: int, code: str, message: str, details: list[dict] | None = None):
         self.status = status
         self.code = code
         self.message = message
+        self.details = details
 
 
 async def domain_error(request: Request, exc: APIError) -> JSONResponse:
-    return error_response(request, exc.status, exc.code, exc.message)
+    return error_response(request, exc.status, exc.code, exc.message, exc.details)
 
 
 def error_response(request: Request, status: int, code: str, message: str, details: list[dict] | None = None, headers: dict | None = None) -> JSONResponse:
@@ -25,7 +26,7 @@ def error_response(request: Request, status: int, code: str, message: str, detai
 
 async def http_error(request: Request, exc: HTTPException) -> JSONResponse:
     code = {404: "RESOURCE_NOT_FOUND", 405: "METHOD_NOT_ALLOWED", 415: "UNSUPPORTED_MEDIA_TYPE"}.get(exc.status_code, "HTTP_ERROR")
-    if isinstance(exc.detail, str) and exc.detail in {"ACCOUNT_INACTIVE"}:
+    if isinstance(exc.detail, str) and exc.detail in {"ACCOUNT_INACTIVE", "CUSTOMER_REQUIRED", "OPERATOR_REQUIRED", "ADMIN_REQUIRED"}:
         code = exc.detail
     message = str(exc.detail) if exc.status_code < 500 else "An unexpected error occurred."
     return error_response(request, exc.status_code, code, message, headers=exc.headers)
