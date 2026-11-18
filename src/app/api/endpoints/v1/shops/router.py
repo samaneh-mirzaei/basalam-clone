@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from app.api.catalog import catalog_response, decode_cursor, encode_cursor, page_response, tag
-from app.api.dependencies import CurrentUser, OptionalUser, SessionDep, has_operator_access, require_operator
+from app.api.dependencies import CurrentUser, OptionalUser, SessionDep, can_moderate_shops, require_operator
 from app.api.http import ContractRoute, created, supplied_patch_fields
 from app.api.representations import shop_data
 from app.core.errors import APIError
@@ -86,9 +86,9 @@ def my_shop(request: Request, user: CurrentUser, session: SessionDep):
 )
 def get_shop(shop_id: int, request: Request, session: SessionDep, user: OptionalUser):
     shop = session.get(Shop, shop_id)
-    if shop is None or (shop.status != "active" and (user is None or (user.id != shop.owner_id and not has_operator_access(user)))):
+    if shop is None or (shop.status != "active" and (user is None or (user.id != shop.owner_id and not can_moderate_shops(user)))):
         raise APIError(404, "SHOP_NOT_FOUND", "Shop not found.")
-    private = bool(user and (user.id == shop.owner_id or has_operator_access(user)))
+    private = bool(user and (user.id == shop.owner_id or can_moderate_shops(user)))
     return catalog_response(request, shop_data(shop), tag("shop", shop.id, shop.version), private)
 
 
@@ -102,7 +102,7 @@ def update_shop(shop_id: int, body: Annotated[ShopPatch, Body(media_type="applic
     if if_match is None:
         raise APIError(428, "PRECONDITION_REQUIRED", "If-Match is required.")
     shop = session.scalar(select(Shop).where(Shop.id == shop_id).with_for_update())
-    if shop is None or (user.id != shop.owner_id and not has_operator_access(user)):
+    if shop is None or (user.id != shop.owner_id and not can_moderate_shops(user)):
         raise APIError(404, "SHOP_NOT_FOUND", "Shop not found.")
     if if_match != tag("shop", shop.id, shop.version):
         raise APIError(412, "PRECONDITION_FAILED", "Shop has changed.")

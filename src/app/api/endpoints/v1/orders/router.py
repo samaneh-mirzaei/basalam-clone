@@ -7,9 +7,10 @@ from sqlalchemy import select, tuple_
 from sqlalchemy.exc import IntegrityError
 
 from app.api.catalog import decode_cursor, encode_cursor, page_response
-from app.api.dependencies import CurrentUser, SessionDep, has_operator_access
+from app.api.dependencies import CurrentUser, SessionDep, can_read_full_order
 from app.api.http import ContractRoute
 from app.core.errors import APIError
+from app.core.audit import audit_log
 from app.schemas.orders.models import Order
 from app.schemas.orders.requests import CheckoutRequest
 from app.services.orders.checkout import checkout, checkout_hash, prior_order
@@ -62,9 +63,11 @@ def list_orders(request: Request, user: CurrentUser, session: SessionDep, status
     return page_response(request, [order_summary(session, order) for order in rows[:limit]], limit, next_cursor, private=True)
 
 
-@router.get("/orders/{order_id}", summary="Read an order receipt", description="Return the complete purchased address, item and fee snapshots, payment, parcel states, and linked return and refund summaries. Only the customer or an operator may read it; other users receive 404.")
-def get_order(order_id: Annotated[int, Path(gt=0)], user: CurrentUser, session: SessionDep):
+@router.get("/orders/{order_id}", summary="Read an order receipt", description="Return the complete purchased address, item and fee snapshots, payment, parcel states, and linked return and refund summaries. Only the customer or an admin may read it; other users receive 404. Admin access to another customer's receipt is audit logged.")
+def get_order(order_id: Annotated[int, Path(gt=0)], request: Request, user: CurrentUser, session: SessionDep):
     order = session.get(Order, order_id)
-    if order is None or (order.customer_id != user.id and not has_operator_access(user)):
+    if order is None or not can_read_full_order(user, order.customer_id):
         raise APIError(404, "ORDER_NOT_FOUND", "Order not found.")
+    if order.customer_id != user.id:
+        audit_log.info("staff_order_receipt_read request_id=%s actor_id=%s order_id=%s", request.state.request_id, user.id, order.id)
     return JSONResponse({"data": order_data(session, order)}, headers={"Cache-Control": "private, no-store"})

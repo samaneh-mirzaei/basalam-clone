@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -41,4 +43,9 @@ async def validation_error(request: Request, exc: RequestValidationError) -> JSO
 
 
 async def unexpected_error(request: Request, exc: Exception) -> JSONResponse:
+    logging.getLogger("app.errors").error(
+        "unexpected_exception request_id=%s method=%s path=%s",
+        request.state.request_id, request.method, request.url.path,
+        exc_info=(type(exc), exc, exc.__traceback__),
+    )
     return error_response(request, 500, "INTERNAL_ERROR", "An unexpected error occurred.")

@@ -2,7 +2,7 @@
 
 [فارسی](README.fa.md)
 
-FastAPI and PostgreSQL marketplace backend. The implemented API covers registration, JWT authentication, profiles, shops, read-only categories, products and SQL catalog search; owned addresses, wallet and ledger reads, cart and saved items; atomic item transfers, wallet checkout, and order receipts. Operators and admins retain ordinary shopping access. Parcel fulfilment, returns, refunds, wallet adjustments, and category/image management are not exposed yet.
+FastAPI and PostgreSQL marketplace backend. The implemented API covers registration, JWT authentication, profiles, shops, categories, products and SQL catalog search; owned addresses, wallet and ledger reads, cart and saved items; atomic item transfers, wallet checkout, order receipts, and admin user management. Operators and admins retain ordinary shopping access. Parcel fulfilment, returns, refunds, wallet adjustments, and product-image management are not exposed yet.
 
 ## Requirements
 
@@ -32,11 +32,13 @@ uv run alembic upgrade head
 uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-Open [Swagger UI](http://127.0.0.1:8000/docs) to test the API. Call `POST /api/v1/auth/tokens` with a registered mobile number and password, copy `data.access_token`, then paste **only the token** into Swagger's **Authorize** dialog. `GET /health` checks the process only; it does not check PostgreSQL. Alembic creates the schema in the existing database, including enums, foreign keys, indexes, and checks. Revisions `0003_address_phone_length`, `0004_payment_debit_required`, and `0005_admin_role` extend the schema without resetting records. The original DBML and SQL design files are not needed to run migrations.
+Open [Swagger UI](http://127.0.0.1:8000/docs) to test the API. Call `POST /api/v1/auth/tokens` with a registered mobile number and password, copy `data.access_token`, then paste **only the token** into Swagger's **Authorize** dialog. `GET /health` checks process liveness; `GET /ready` checks PostgreSQL connectivity and returns 503 if unavailable. Alembic creates the schema in the existing database, including enums, foreign keys, indexes, and checks. Revisions `0003_address_phone_length` through `0006_category_active` extend the schema without resetting records. The original DBML and SQL design files are not needed to run migrations.
 
 ## Administrative access
 
-Accounts have `customer`, `operator`, or `admin` roles. Every role retains its own wallet, cart, addresses, and checkout. Operator and admin accounts can use operational shop views and status controls; admins can also read order receipts under the existing operator rule. Only admins can read or change account roles and activity through `GET` and `PATCH /api/v1/admin/users/{user_id}`. The PATCH requires `Content-Type: application/merge-patch+json`; it cannot remove the acting admin's access or the last active admin. It does not change passwords, wallets, or carts.
+Accounts have `customer`, `operator`, or `admin` roles. Every role retains its own wallet, cart, addresses, and checkout. Operator and admin accounts can inspect private catalog entries and use operational shop views and status controls. Full order receipts and shipping details are available only to the customer who placed the order or an admin; admin reads of another customer's receipt are audit logged without address contents. Admins can search users with `GET /api/v1/admin/users`, inspect with `GET /api/v1/admin/users/{user_id}`, create operators/admins with `POST /api/v1/admin/users`, and change role or activity with `PATCH /api/v1/admin/users/{user_id}`. PATCH requires `Content-Type: application/merge-patch+json`; it cannot remove the acting admin's access or the last active admin. These routes do not directly alter wallet balances.
+
+Admins can create and edit categories with `POST /api/v1/categories` and `PATCH /api/v1/categories/{category_id}`. Slugs must be unique; parent categories must exist and be active; circular parent links are rejected. Setting `is_active=false` hides a category from public category reads while preserving product references. Deactivate active children first.
 
 Public registration always creates a customer. The local demo seed below creates a demo admin. To promote a separate existing account on the local `basalam` database, run the migration and then use this explicit command:
 

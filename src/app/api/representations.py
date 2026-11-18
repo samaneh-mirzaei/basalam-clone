@@ -33,7 +33,7 @@ def shop_data(shop: Shop) -> dict:
 
 
 def category_data(category: Category) -> dict:
-    return {"id": category.id, "parent_id": category.parent_id, "name": category.name, "slug": category.slug}
+    return {"id": category.id, "parent_id": category.parent_id, "name": category.name, "slug": category.slug, "is_active": category.is_active}
 
 
 def product_data(product: Product, images: list[dict] | None = None) -> dict:

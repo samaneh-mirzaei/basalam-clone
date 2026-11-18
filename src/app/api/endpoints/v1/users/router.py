@@ -11,8 +11,9 @@ from app.api.representations import user_data, wallet_data
 from app.core.config import settings
 from app.core.errors import APIError
 from app.core.security import hash_password, issue_token, verify_password
-from app.schemas.users.models import Cart, User, Wallet, WalletTransaction
+from app.schemas.users.models import User
 from app.schemas.users.requests import Credentials, ProfilePatch, Registration
+from app.services.users.provision import provision_user
 
 router = APIRouter(route_class=ContractRoute)
 
@@ -25,15 +26,8 @@ router = APIRouter(route_class=ContractRoute)
     description="Create a customer account using an Iranian mobile number, name, and password (minimum 8 characters). Registration atomically creates a wallet with a 1,000,000 Toman welcome credit and an empty cart. Returns 201 with the user and wallet; a duplicate mobile returns 409. Operator and admin accounts cannot be registered here.",
 )
 def register(body: Registration, request: Request, session: SessionDep):
-    user = User(mobile=body.mobile, full_name=body.full_name, role="customer", password_hash=hash_password(body.password))
     try:
-        session.add(user)
-        session.flush()
-        wallet = Wallet(user_id=user.id, balance=1_000_000)
-        session.add(wallet)
-        session.flush()
-        session.add(WalletTransaction(wallet_id=wallet.id, reason="initial_credit", amount=1_000_000, balance_after=1_000_000))
-        session.add(Cart(user_id=user.id))
+        user, wallet = provision_user(session, body.mobile, body.full_name, body.password)
         session.commit()
     except IntegrityError as exc:
         session.rollback()

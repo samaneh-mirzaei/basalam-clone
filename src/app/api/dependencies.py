@@ -37,6 +37,18 @@ def has_operator_access(user: User | None) -> bool:
     return user is not None and user.role in ("operator", "admin")
 
 
+def can_moderate_shops(user: User | None) -> bool:
+    return user is not None and user.role in ("operator", "admin")
+
+
+def can_inspect_private_products(user: User | None) -> bool:
+    return user is not None and user.role in ("operator", "admin")
+
+
+def can_read_full_order(user: User, customer_id: int) -> bool:
+    return user.id == customer_id or user.role == "admin"
+
+
 def require_customer(user: AuthenticatedUser) -> User:
     if user.role not in ("customer", "operator", "admin"):
         raise HTTPException(403, "CUSTOMER_REQUIRED")

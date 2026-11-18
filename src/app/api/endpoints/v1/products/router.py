@@ -7,7 +7,7 @@ from sqlalchemy import and_, or_, select
 from sqlalchemy.exc import IntegrityError
 
 from app.api.catalog import catalog_response, decode_cursor, encode_cursor, page_response
-from app.api.dependencies import CurrentUser, OptionalUser, SessionDep, has_operator_access
+from app.api.dependencies import CurrentUser, OptionalUser, SessionDep, can_inspect_private_products
 from app.api.http import ContractRoute, created, supplied_patch_fields
 from app.api.representations import product_data, shop_data
 from app.core.errors import APIError
@@ -20,7 +20,7 @@ router = APIRouter(route_class=ContractRoute)
 
 
 def visible(product: Product, shop: Shop, user) -> bool:
-    return (product.status == "published" and shop.status == "active") or bool(user and (user.id == shop.owner_id or has_operator_access(user)))
+    return (product.status == "published" and shop.status == "active") or bool(user and (user.id == shop.owner_id or can_inspect_private_products(user)))
 
 
 def product_tag(product: Product, shop: Shop) -> str:
@@ -42,8 +42,8 @@ def list_products(request: Request, session: SessionDep, q: str | None = None, c
     if q:
         query = query.where(or_(Product.title.ilike(f"%{q}%"), Product.description.ilike(f"%{q}%")))
     if category_id is not None:
-        descendants = select(Category.id).where(Category.id == category_id).cte(recursive=True)
-        descendants = descendants.union_all(select(Category.id).where(Category.parent_id == descendants.c.id))
+        descendants = select(Category.id).where(Category.id == category_id, Category.is_active.is_(True)).cte(recursive=True)
+        descendants = descendants.union_all(select(Category.id).where(Category.parent_id == descendants.c.id, Category.is_active.is_(True)))
         query = query.where(Product.category_id.in_(select(descendants.c.id)))
     if shop_id is not None:
         query = query.where(Product.shop_id == shop_id)
@@ -78,8 +78,10 @@ def create_product(body: ProductWrite, user: CurrentUser, session: SessionDep):
         raise APIError(404, "SHOP_NOT_FOUND", "Shop not found.")
     if body.status == "published" and shop.status != "active":
         raise APIError(409, "SHOP_NOT_ACTIVE", "Shop is not active.")
-    if body.category_id is not None and session.get(Category, body.category_id) is None:
-        raise APIError(404, "CATEGORY_NOT_FOUND", "Category not found.")
+    if body.category_id is not None:
+        category = session.get(Category, body.category_id)
+        if category is None or not category.is_active:
+            raise APIError(404, "CATEGORY_NOT_FOUND", "Category not found.")
     product = Product(shop_id=shop.id, **body.model_dump())
     session.add(product)
     session.commit()
@@ -100,7 +102,7 @@ def get_product(product_id: int, request: Request, session: SessionDep, user: Op
         raise APIError(404, "PRODUCT_NOT_FOUND", "Product not found.")
     images = session.scalars(select(ProductImage).where(ProductImage.product_id == product.id).order_by(ProductImage.sort_order)).all()
     representation = {**product_data(product, [{"id": str(image.id), "url": image.url, "sort_order": image.sort_order} for image in images]), "shop": shop_data(shop)}
-    private = bool(user and (user.id == shop.owner_id or has_operator_access(user)))
+    private = bool(user and (user.id == shop.owner_id or can_inspect_private_products(user)))
     return catalog_response(request, representation, product_tag(product, shop), private)
 
 
@@ -124,8 +126,10 @@ def update_product(product_id: int, body: Annotated[ProductPatch, Body(media_typ
         raise APIError(422, "VALIDATION_FAILED", "Field cannot be null.")
     if changes.get("status") == "published" and shop.status != "active":
         raise APIError(409, "SHOP_NOT_ACTIVE", "Shop is not active.")
-    if changes.get("category_id") is not None and "category_id" in changes and session.get(Category, changes["category_id"]) is None:
-        raise APIError(404, "CATEGORY_NOT_FOUND", "Category not found.")
+    if changes.get("category_id") is not None:
+        category = session.get(Category, changes["category_id"])
+        if category is None or not category.is_active:
+            raise APIError(404, "CATEGORY_NOT_FOUND", "Category not found.")
     for field, value in changes.items():
         setattr(product, field, value)
     product.version += 1

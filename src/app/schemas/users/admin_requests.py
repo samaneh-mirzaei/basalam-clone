@@ -1,8 +1,16 @@
 from typing import Literal
 
-from pydantic import model_validator
+from pydantic import Field, model_validator
 
 from app.api.http import StrictBody
+from app.schemas.users.requests import Mobile
+
+
+class PrivilegedAccountCreate(StrictBody):
+    mobile: Mobile
+    full_name: str = Field(min_length=1, max_length=100)
+    password: str = Field(min_length=8, max_length=1024)
+    role: Literal["operator", "admin"]
 
 
 class UserAccessPatch(StrictBody):
