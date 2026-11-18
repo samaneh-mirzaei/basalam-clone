@@ -1,0 +1,34 @@
+# Local secrets
+.env
+.env.*
+!.env.example
+.demo-credentials
+
+# Internal planning and local-machine setup
+/docs/
+/scripts/start_database.ps1
+
+# Python environments and generated files
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Tool caches and reports
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Local database and logs
+postgres-data/
+*.log
+
+# Operating-system files
+.DS_Store
+Thumbs.db

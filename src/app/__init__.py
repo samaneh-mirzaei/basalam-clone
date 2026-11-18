@@ -1,0 +1,1 @@
+"""Basalam marketplace application."""
