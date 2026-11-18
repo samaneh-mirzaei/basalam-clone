@@ -38,13 +38,13 @@ Open [Swagger UI](http://127.0.0.1:8000/docs) to test the API. Call `POST /api/v
 
 Accounts have `customer`, `operator`, or `admin` roles. Every role retains its own wallet, cart, addresses, and checkout. Operator and admin accounts can use operational shop views and status controls; admins can also read order receipts under the existing operator rule. Only admins can read or change account roles and activity through `GET` and `PATCH /api/v1/admin/users/{user_id}`. The PATCH requires `Content-Type: application/merge-patch+json`; it cannot remove the acting admin's access or the last active admin. It does not change passwords, wallets, or carts.
 
-Public registration always creates a customer. To bootstrap the first admin, register an account normally, migrate the local `basalam` database, then explicitly promote that existing account on the local machine:
+Public registration always creates a customer. The local demo seed below creates a demo admin. To promote a separate existing account on the local `basalam` database, run the migration and then use this explicit command:
 
 ```powershell
 uv run python scripts/promote_admin.py --mobile 09XXXXXXXXX --confirm
 ```
 
-The command preserves its password, wallet, ledger, and cart. Keep local database access and `.demo-credentials` private. The demo operator remains an operator and can shop normally.
+The command preserves its password, wallet, ledger, and cart. Keep local database access and `.demo-credentials` private. Demo operator and admin accounts can both shop normally.
 
 For checkout in Swagger UI: register and authenticate a buyer and seller, create the seller's shop and a published product, create a buyer address, add that product to the buyer's cart, and read `GET /api/v1/users/me/cart`. Send its `displayed_total`, the address ID **as a string**, and a new `checkout_key` to `POST /api/v1/orders`. Checkout rechecks stock, product/shop status, price, and wallet funds. An exact retry with the same key and payload returns the original receipt; a changed payload returns 409. The buyer can read `GET /api/v1/users/me/orders` and `GET /api/v1/orders/{order_id}`.
 
@@ -52,7 +52,7 @@ A fresh clone needs its own PostgreSQL database and `.env`; database files and l
 
 ## Demo data
 
-`uv run python scripts/seed_demo.py` creates a buyer, seller, operator, shop, two categories, and four products **only** when the configured database is local and named `basalam`. Run migrations first. The seed is repeatable: it does not reset existing passwords or grant duplicate welcome credits. It writes a shared demo password to the Git-ignored `.demo-credentials` file; read it locally with `Get-Content .demo-credentials`. Three demo products are public; the draft cup is visible to its owner, an operator, or an admin. If the demo accounts already exist but `.demo-credentials` is missing, the seed refuses to reset their passwords.
+`uv run python scripts/seed_demo.py` creates a buyer, seller, operator, **admin**, shop, two categories, and four products **only** when the configured database is local and named `basalam`. Run migrations first. Each new demo account receives a wallet, one 1,000,000 Toman welcome credit, and an empty cart. The seed is repeatable: it does not reset existing passwords or grant duplicate welcome credits. It writes the shared demo password and account mobiles to the Git-ignored `.demo-credentials` file; read it locally with `Get-Content .demo-credentials`. When upgrading an older seed, it adds the admin account and appends its mobile to the existing credentials file. Three demo products are public; the draft cup is visible to its owner, an operator, or an admin. If the demo accounts already exist but `.demo-credentials` is missing, the seed refuses to reset their passwords.
 
 ## Tests
 

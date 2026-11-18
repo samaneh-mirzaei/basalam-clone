@@ -10,7 +10,7 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.security import hash_password
+from app.core.security import hash_password, verify_password
 from app.data.session import engine
 from app.schemas.categories.models import Category
 from app.schemas.products.models import Product
@@ -19,10 +19,12 @@ from app.schemas.users.models import Cart, User, Wallet, WalletTransaction
 
 ROOT = Path(__file__).resolve().parents[1]
 CREDENTIALS = ROOT / ".demo-credentials"
+DEMO_ADMIN_MOBILE = "09000000014"
 ACCOUNTS = (
     ("buyer", "09000000011", "Demo Buyer", "customer"),
     ("seller", "09000000012", "Demo Seller", "customer"),
     ("operator", "09000000013", "Demo Operator", "operator"),
+    ("admin", DEMO_ADMIN_MOBILE, "Demo Admin", "admin"),
 )
 
 
@@ -62,7 +64,12 @@ def main() -> None:
     require_local_database()
     existing_credentials = CREDENTIALS.exists()
     if existing_credentials:
-        password = CREDENTIALS.read_text(encoding="utf-8").split("password=", 1)[1].splitlines()[0]
+        credential_text = CREDENTIALS.read_text(encoding="utf-8")
+        password_lines = [line.removeprefix("password=") for line in credential_text.splitlines() if line.startswith("password=")]
+        admin_lines = [line.removeprefix("admin:").strip() for line in credential_text.splitlines() if line.startswith("admin:")]
+        if len(password_lines) != 1 or not password_lines[0] or admin_lines not in ([], [DEMO_ADMIN_MOBILE]):
+            raise SystemExit("Invalid demo credentials file; no accounts were changed.")
+        password = password_lines[0]
     else:
         password = secrets.token_urlsafe(18)
 
@@ -73,6 +80,9 @@ def main() -> None:
             raise SystemExit("Run uv run alembic upgrade head before seeding.")
         if not existing_credentials and session.scalar(select(User.id).where(User.mobile.in_([account[1] for account in ACCOUNTS])).limit(1)):
             raise SystemExit("Demo accounts already exist but .demo-credentials is missing; refusing to reset their passwords.")
+        existing_admin = session.scalar(select(User).where(User.mobile == DEMO_ADMIN_MOBILE))
+        if existing_admin is not None and not verify_password(existing_admin.password_hash, password):
+            raise SystemExit("Demo admin already exists with a different password; no accounts were changed.")
         with session.begin_nested():
             users = {label: get_or_create_user(session, mobile, name, role, password) for label, mobile, name, role in ACCOUNTS}
             shop = session.scalar(select(Shop).where(Shop.slug == "demo-ceramics"))
@@ -100,6 +110,11 @@ def main() -> None:
             "Local demo accounts (use only on this machine)\n"
             + "\n".join(f"{label}: {mobile}" for label, mobile, _, _ in ACCOUNTS)
             + f"\npassword={password}\n",
+            encoding="utf-8",
+        )
+    elif not admin_lines:
+        CREDENTIALS.write_text(
+            credential_text + ("" if credential_text.endswith("\n") else "\n") + f"admin: {DEMO_ADMIN_MOBILE}\n",
             encoding="utf-8",
         )
     print("Demo records are ready. Read .demo-credentials for the mobile numbers and password.")

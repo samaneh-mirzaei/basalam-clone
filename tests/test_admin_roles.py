@@ -21,6 +21,7 @@ get_or_create_user = seed["get_or_create_user"]
 
 def test_role_dependencies():
     assert next(role for label, _, _, role in ACCOUNTS if label == "operator") == "operator"
+    assert next(role for label, _, _, role in ACCOUNTS if label == "admin") == "admin"
     customer = User(role="customer")
     operator = User(role="operator")
     admin = User(role="admin")
@@ -102,19 +103,21 @@ def test_admin_operator_and_customer_access():
 
 
 @requires_postgres
-def test_seed_operator_keeps_wallet_cart_and_existing_password():
+@pytest.mark.parametrize("role", ["operator", "admin"])
+def test_seed_privileged_accounts_keep_wallet_cart_and_existing_password(role):
     mobile = f"09{randrange(10**9):09d}"
     with Session(engine()) as session:
-        operator = get_or_create_user(session, mobile, "Seed Operator", "operator", "first password")
+        user = get_or_create_user(session, mobile, f"Seed {role}", role, "first password")
         session.commit()
-        operator_id = operator.id
+        user_id = user.id
     with Session(engine()) as session:
-        same = get_or_create_user(session, mobile, "Seed Operator", "operator", "different password")
-        assert same.id == operator_id
+        same = get_or_create_user(session, mobile, f"Seed {role}", role, "different password")
+        assert same.id == user_id
+        assert same.role == role
         assert verify_password(same.password_hash, "first password")
         assert not verify_password(same.password_hash, "different password")
-        wallet = session.scalar(select(Wallet).where(Wallet.user_id == operator_id))
+        wallet = session.scalar(select(Wallet).where(Wallet.user_id == user_id))
         assert wallet.balance == 1_000_000
-        assert session.scalar(select(Cart.id).where(Cart.user_id == operator_id)) is not None
+        assert session.scalar(select(Cart.id).where(Cart.user_id == user_id)) is not None
         entries = session.scalars(select(WalletTransaction).where(WalletTransaction.wallet_id == wallet.id)).all()
         assert len(entries) == 1 and entries[0].reason == "initial_credit"

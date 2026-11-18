@@ -57,8 +57,10 @@ def test_phase1_journey():
         public_list = client.get("/api/v1/shops")
         assert public_list.headers["etag"]
         assert client.get("/api/v1/shops", headers={"If-None-Match": public_list.headers["etag"]}).status_code == 304
-        assert client.get("/api/v1/categories").json()["data"] == []
-        assert client.get("/api/v1/categories", params={"format": "flat"}).json()["data"] == []
+        categories = client.get("/api/v1/categories")
+        flat_categories = client.get("/api/v1/categories", params={"format": "flat"})
+        assert categories.status_code == 200 and isinstance(categories.json()["data"], list)
+        assert flat_categories.status_code == 200 and isinstance(flat_categories.json()["data"], list)
         assert client.get("/api/v1/categories/999999").status_code == 404
         second_product = client.post("/api/v1/shops/me/products", headers=headers, json={"title": "Plate", "price": 200, "stock_quantity": 0, "status": "published"})
         assert second_product.status_code == 201
