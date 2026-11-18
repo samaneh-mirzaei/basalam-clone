@@ -1,11 +1,13 @@
 # Basalam backend
 
-FastAPI and PostgreSQL marketplace backend. Phase 1 includes registration, JWT authentication, profiles, shops, categories, products, and SQL product search. Phase 2 adds owned address creation/reads, wallet and ledger reads, cart and saved items, atomic item transfers, wallet checkout, and order receipts. Fulfilment, returns, refunds, and operator workflows follow in later phases.
+[فارسی](README.fa.md)
+
+FastAPI and PostgreSQL marketplace backend. The implemented API covers registration, JWT authentication, profiles, shops, read-only categories, products and SQL catalog search; owned addresses, wallet and ledger reads, cart and saved items; atomic item transfers, wallet checkout, and order receipts. Operators and admins retain ordinary shopping access. Parcel fulfilment, returns, refunds, wallet adjustments, and category/image management are not exposed yet.
 
 ## Requirements
 
 - Python 3.11 or newer and [uv](https://docs.astral.sh/uv/)
-- PostgreSQL 18 or a compatible recent version
+- PostgreSQL 18 or a compatible recent version, with a database you have created
 
 ## Local setup
 
@@ -16,18 +18,25 @@ uv sync --locked --extra test
 if (-not (Test-Path .env)) { Copy-Item .env.example .env }
 ```
 
-Edit `.env`: set `BASALAM_DATABASE_URL` to a PostgreSQL database you created and `BASALAM_JWT_SECRET` to a random secret of at least 32 characters. The example values are placeholders and cannot be used as-is. Never commit `.env`.
+Create the PostgreSQL database before migrating. Edit `.env` with its real connection URL and a random JWT signing secret of at least 32 characters:
+
+```text
+BASALAM_DATABASE_URL=postgresql+psycopg://USERNAME:PASSWORD@127.0.0.1:5432/basalam
+BASALAM_JWT_SECRET=YOUR_RANDOM_SECRET_OF_AT_LEAST_32_CHARACTERS
+```
+
+Use the actual host, port, database, and credentials for your PostgreSQL instance. The JWT secret is separate from the database password. Percent-encode special characters in URL credentials. `.env.example` contains unusable placeholders. Never commit `.env`.
 
 ```powershell
 uv run alembic upgrade head
 uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-Open [Swagger UI](http://127.0.0.1:8000/docs) to test the API. `GET /health` checks the process only; it does not check PostgreSQL. Alembic creates the complete schema, including enums, foreign keys, indexes, and companion checks. Revision `0003_address_phone_length` permits an optional leading `+` and 15 phone digits; `0004_payment_debit_required` requires each wallet payment to reference its ledger debit; `0005_admin_role` adds the admin role without resetting users. The original DBML and SQL design files are not needed to run migrations.
+Open [Swagger UI](http://127.0.0.1:8000/docs) to test the API. Call `POST /api/v1/auth/tokens` with a registered mobile number and password, copy `data.access_token`, then paste **only the token** into Swagger's **Authorize** dialog. `GET /health` checks the process only; it does not check PostgreSQL. Alembic creates the schema in the existing database, including enums, foreign keys, indexes, and checks. Revisions `0003_address_phone_length`, `0004_payment_debit_required`, and `0005_admin_role` extend the schema without resetting records. The original DBML and SQL design files are not needed to run migrations.
 
 ## Administrative access
 
-Accounts have `customer`, `operator`, or `admin` roles. Every role retains its own wallet, cart, addresses, and checkout. Operator and admin accounts can use existing operational shop views and status controls. Only admins can read or change account roles and activity through `/api/v1/admin/users/{user_id}`. These endpoints do not change passwords or wallet balances.
+Accounts have `customer`, `operator`, or `admin` roles. Every role retains its own wallet, cart, addresses, and checkout. Operator and admin accounts can use operational shop views and status controls; admins can also read order receipts under the existing operator rule. Only admins can read or change account roles and activity through `GET` and `PATCH /api/v1/admin/users/{user_id}`. The PATCH requires `Content-Type: application/merge-patch+json`; it cannot remove the acting admin's access or the last active admin. It does not change passwords, wallets, or carts.
 
 Public registration always creates a customer. To bootstrap the first admin, register an account normally, migrate the local `basalam` database, then explicitly promote that existing account on the local machine:
 
@@ -37,13 +46,13 @@ uv run python scripts/promote_admin.py --mobile 09XXXXXXXXX --confirm
 
 The command preserves its password, wallet, ledger, and cart. Keep local database access and `.demo-credentials` private. The demo operator remains an operator and can shop normally.
 
-For checkout in Swagger UI: register and authenticate a buyer and seller, create the seller's shop and a published product, create a buyer address, add that product to the buyer's cart, and read `GET /api/v1/users/me/cart`. Send its `displayed_total`, your address ID, and a new `checkout_key` to `POST /api/v1/orders`. A repeat with the same key and payload returns the same receipt. The buyer can read `GET /api/v1/users/me/orders` and `GET /api/v1/orders/{order_id}`.
+For checkout in Swagger UI: register and authenticate a buyer and seller, create the seller's shop and a published product, create a buyer address, add that product to the buyer's cart, and read `GET /api/v1/users/me/cart`. Send its `displayed_total`, the address ID **as a string**, and a new `checkout_key` to `POST /api/v1/orders`. Checkout rechecks stock, product/shop status, price, and wallet funds. An exact retry with the same key and payload returns the original receipt; a changed payload returns 409. The buyer can read `GET /api/v1/users/me/orders` and `GET /api/v1/orders/{order_id}`.
 
 A fresh clone needs its own PostgreSQL database and `.env`; database files and local credentials are never included in Git.
 
 ## Demo data
 
-`uv run python scripts/seed_demo.py` creates a buyer, seller, operator, shop, two categories, and four products in a local database named `basalam`. It is safe to rerun and does not reset existing accounts. It generates a shared demo password in the Git-ignored `.demo-credentials` file; read it locally with `Get-Content .demo-credentials`. In Swagger UI, call `POST /api/v1/auth/tokens`, copy `data.access_token`, and paste only the token into **Authorize**. Three demo products are public; the draft cup is visible only to its owner or an operator.
+`uv run python scripts/seed_demo.py` creates a buyer, seller, operator, shop, two categories, and four products **only** when the configured database is local and named `basalam`. Run migrations first. The seed is repeatable: it does not reset existing passwords or grant duplicate welcome credits. It writes a shared demo password to the Git-ignored `.demo-credentials` file; read it locally with `Get-Content .demo-credentials`. Three demo products are public; the draft cup is visible to its owner, an operator, or an admin. If the demo accounts already exist but `.demo-credentials` is missing, the seed refuses to reset their passwords.
 
 ## Tests
 
@@ -51,5 +60,14 @@ A fresh clone needs its own PostgreSQL database and `.env`; database files and l
 uv run --locked --extra test pytest -q
 ```
 
-The PostgreSQL integration tests write data. They run only when both `BASALAM_DATABASE_URL` and `BASALAM_JWT_SECRET` are exported as environment variables. Point them at a disposable migrated database, never shared data. They cover transfer replay, checkout rollback and replay, stock contention, wallet contention, and order ownership.
+PostgreSQL integration tests write data and are skipped unless **both** `BASALAM_DATABASE_URL` and `BASALAM_JWT_SECRET` are exported as environment variables; values in `.env` alone do not enable them. Point these variables at a **separate, disposable, migrated database**, never shared or development data. The suite covers authorization, seed account invariants, transfers, checkout rollback and replay, stock and wallet contention, and order ownership. For example, after creating a disposable database:
+
+```powershell
+$env:BASALAM_DATABASE_URL = 'postgresql+psycopg://USERNAME:PASSWORD@127.0.0.1:5432/basalam_test'
+$env:BASALAM_JWT_SECRET = 'a-test-only-secret-with-at-least-32-characters'
+uv run --locked alembic upgrade head
+uv run --locked --extra test pytest -q
+```
+
+Clear those two shell variables before using the development database again.
 
